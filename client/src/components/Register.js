@@ -1,6 +1,5 @@
 import React,{Component} from 'react';
 import axios from 'axios';
-// import {connect} from 'react-redux';
 import {setAuthenticationHeader} from './utils/authentication'
 import './styling/login.css'
 
@@ -12,7 +11,8 @@ class Register extends Component {
       password:'',
       firstName:'',
       lastName:'',
-      email:''
+      email:'',
+      message:''
     }
   }
 
@@ -31,13 +31,12 @@ class Register extends Component {
       email: this.state.email
     })
     .then(response=>{
-
       let token = response.data.token
       localStorage.setItem('jsonwebtoken',token)
       this.props.onAuthenticated(token)
       setAuthenticationHeader(token)
     })
-    .catch(error=>console.log(error))
+    .catch(error=>alert("Username, password, or email is incorrect! Username must be 6-20 characters. Password must be 6-20 characters with one uppercase and lowercase letter and at least one number. Must use a valid email."))
   )
 
   render(){

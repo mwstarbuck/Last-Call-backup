@@ -11,6 +11,7 @@ const express = require('express'),
   models = require('./models'),
   jwt = require('jsonwebtoken'),
   MovieData = require('./movieData.json'),
+  NewMovieData = require('./newMovies.json'),
   bcrypt = require('bcrypt'),
   SALT_ROUNDS = 10,
   myPlaintextPassword = 's0/\/\P4$$w0rD',
@@ -20,36 +21,25 @@ const express = require('express'),
 
 const keys = require('./.env.json')
 const nodemailer = require('nodemailer');
-// const transporter = nodemailer.createTransport({
-//   host: 'smtp.ethereal.email',
-//   port: 587,
-//   auth: {
-//     user: 'ruby.mcglynn48@ethereal.email',
-//     pass: 'TtaFjpUTeD8SRvzdUC'
-//   }
-// });
 const transporter = nodemailer.createTransport({
   service: 'Gmail',
   port: 587,
   auth: {
     user: 'no.reply.last.call7@gmail.com',
-    pass: '783LcCl65'
+    pass: keys.EMAIL_PASSWORD
   }
 });
 
 
 
-// const servFindExp = require('./servFindExp')
-// import servFindExp from './servFindExp'
 app.use(cors())
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: false }))
-app.use(favicon(__dirname + '/build/favicon.ico'));
-// the __dirname is the current directory from where the script is running
-// app.use(express.static(__dirname));
-// app.use(express.static(path.join(__dirname, 'build')));
-// app.get('/*', function (req, res) {
-//   res.sendFile(path.join(__dirname, 'build', 'index.html'));
+// app.use(express.static(__dirname + "/public"))
+
+// app.get('/', function (req, res) {
+//   const index = path.join(__dirname, 'build', 'index.html');
+//   res.sendFile(index);
 // });
 function emailUsers() {
   models.User.findAll()
@@ -60,7 +50,6 @@ function emailUsers() {
         models.WatchList.findAll({
           where: {
             userid: userid
-            //check user opt in for emails notifications here?
           }
         })
           .then((userMovies) => {
@@ -68,7 +57,7 @@ function emailUsers() {
             let mailer = []
             userExp.forEach((movie) => {
               let count = getDays(movie.date)
-              if (count <= 7 && count > 0) {
+              if (count === 30 && count > 0) {
                 let movieItem = {
                   title: movie.title,
                   date: movie.date,
@@ -76,6 +65,24 @@ function emailUsers() {
                 }
                 mailer.push(movieItem)
               }
+              if (count === 14 && count > 0) {
+                let movieItem = {
+                  title: movie.title,
+                  date: movie.date,
+                  counter: getDays(movie.date)
+                }
+                mailer.push(movieItem)
+              }
+              if (count === 2 && count > 0) {
+                let movieItem = {
+                  title: movie.title,
+                  date: movie.date,
+                  counter: getDays(movie.date)
+                }
+                mailer.push(movieItem)
+              }
+
+
             })
             console.log(mailer)
             if (mailer.length != 0) {
@@ -84,15 +91,9 @@ function emailUsers() {
                           <h3>${movie.title} will be leaving Netflix on ${movie.date} in ${movie.counter} days</h3>
                   `
               })
-              // let mailOptions = {
-              //   from: 'ruby.mcglynn48@ethereal.email',
-              //   to: 'ruby.mcglynn48@ethereal.email',
-              //   subject: 'Movies on your Watch List are going away!',
-              //   html: text.join('')
-              // };
               let mailOptions = {
-                from: 'miglas9@yahoo.com',
-                to: 'miglas9@yahoo.com',
+                from: 'no.reply.last.call7@gmail.com',
+                to: userEmail,
                 subject: 'Movies on your Watch List are going away!',
                 html: text.join('')
               };
@@ -118,22 +119,25 @@ schedule.scheduleJob('15 9 * * *', function () {
     .header("X-RapidAPI-Key", `${keys.RICHARD_UNOGS_KEY} `)
     .end(function (result) {
       console.log(result.status, result.headers);
-      //console.log(result.body) to see all data
       let data = JSON.stringify(result.body)
       fs.writeFile('./movieData.json', data)
     });
 })
-schedule.scheduleJob('15 9 * * *', function () {
+schedule.scheduleJob('16 9 * * *', function () {
+  console.log('Daily API call initiated.');
+  unirest.get("https://unogs-unogs-v1.p.rapidapi.com/aaapi.cgi?q=get:new7:US&p=1&t=ns&st=adv")
+    .header("X-RapidAPI-Host", "unogs-unogs-v1.p.rapidapi.com")
+    .header("X-RapidAPI-Key", `${keys.MIKE_UNOGS_KEY} `)
+    .end(function (result) {
+      console.log(result.status, result.headers);
+      let data = JSON.stringify(result.body)
+      fs.writeFile('./newMovies.json', data)
+    });
+})
+
+schedule.scheduleJob('17 9 * * *', function () {
   emailUsers()
 })
-// emailUsers()
-// schedule.scheduleJob('16 9 * * *', function () {
-//   models.User.findAll()
-//     .then((allUsers) => {
-//       console.log(allUsers)
-//     })
-//   emailer()
-// })
 function authenticate(req, res, next) {
   let headers = req.headers["authorization"]
 
@@ -151,7 +155,12 @@ function authenticate(req, res, next) {
     }
   })
 }
-
+app.get('/expiring', (req, res) => {
+  res.json(MovieData)
+})
+app.get('/new-releases', (req, res) => {
+  res.json(NewMovieData)
+})
 app.get('/username', authenticate, (req, res) => {
   res.send(currentUser[currentUser.length - 1])
 })
@@ -162,81 +171,133 @@ app.post('/register', (req, res) => {
   let firstName = req.body.firstName
   let lastName = req.body.lastName
   let email = req.body.email
-  models.User.findOne({
-    where: {
-      username: username
-    }
-  }).then((user) => {
-    if (user) {
-      res.render('register', { message: "User name already exists!" })
-    } else {
-      bcrypt.hash(password, SALT_ROUNDS, function (error, hash) {
-        if (error == null) {
-          let user = models.User.build({
-            username: username,
-            password: hash,
-            firstName: firstName,
-            lastName: lastName,
-            email: email
-          })
-          user.save()
-        }
-      })
-    }
-  })
+
+  let emailRegEx = RegExp('/^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/')
+  //standard email format
+  let userRegEx = RegExp('([a-zA-Z0-9]{6,20})$')
+  //username can contain a-z, A-Z, and 0-9, and has to be between
+  //six and twenty digits
+  let pwdRegEx = RegExp('(?!^[0-9]*$)(?!^[a-zA-Z]*$)^([a-zA-Z0-9]{8,20})$')
+  //password CANNOT start with a number
+  //password CANNOT be just letters
+  //password must contain one lowercase letter, one uppercase letter, one number,
+  //and must be between eight to twenty digits long
+  if (userRegEx.test(username) === true && pwdRegEx.test(password) === true && emailRegEx.test(email) === true) {
+    models.User.findOne({
+      where: {
+        username: username
+      }
+    }).then((user) => {
+      if (user) {
+        res.render('register', { message: "User name already exists!" })
+      } else {
+        bcrypt.hash(password, SALT_ROUNDS, function (error, hash) {
+          if (error == null) {
+            let user = models.User.build({
+              username: username,
+              password: hash,
+              firstName: firstName,
+              lastName: lastName,
+              email: email
+            })
+            user.save()
+          }
+        })
+      }
+    })
+  } else {
+    let message = "Username, password, or email is incorrect! Username must be 6-20 characters. Password must be 6-20 characters with one uppercase and lowercase letter and at least one number."
+    res.status(500).json({ message: message })
+  }
 })
 
 app.post('/login', (req, res) => {
   let username = req.body.username
   let password = req.body.password
-  console.log(username, password)
   models.User.findOne({
     where: {
       username: username
     }
   }).then((user) => {
 
-    // let user = users.find((u)=>{
-    //   return u.username == username && u.password == password
-    // })
     if (user) {
-      jwt.sign({ username: username }, 'secret',
-        function (err, token) {
-          if (token) {
-            res.json({ username: username, token: token, id: user.id }) //Mike added user.id to response
-          } else {
-            res.status(500).json({ message: 'unable to generate token' })
-          }
-        })
+      bcrypt.compare(password, user.password, (error, result) => {
+        if (result) {
+          jwt.sign({ username: username }, 'secret',
+            function (error, token) {
+              if (token) {
+                res.json({ username: username, token: token, id: user.id, status: 200 })
+              } else {
+                res.status(500).json({ message: 'unable to generate token', status: 500 })
+              }
+            })
+        }
+        else {
+          let message = "wrong username and password"
+          res.status(500).json({ message: message, status: 500 })
+          console.log("wrong username and password")
+        }
+      })
     }
   })
+  // .catch(()=>{
+  //   let message = "wrong username and password"
+  //   res.status(500).json({message:message})
+  // })
 })
 
-app.get('/expiring', (req, res) => {
-  res.json(MovieData)
-})
 app.post('/add-movie', (req, res) => {
   let title = req.body.title
   let imdbID = req.body.imdbID
   let userid = parseInt(req.body.userid)
-
-  let movie = models.WatchList.build({
-    title: title,
-    imdbid: imdbID,
-    userid: userid
-  })
-  movie.save().then((savedMovie) => {
-  })
-    .then(() => {
-      models.WatchList.findAll({
-        where: {
-          userid: userid
-        }
+  models.WatchList.findAll({
+    where: {
+      imdbid: imdbID,
+      userid: userid
+    }
+  }).then((movie) => {
+    if (movie.length > 0) {
+      console.log(movie)
+      let message = "Movie is already in your watchlist"
+      res.status(500).json({ message: message, status: 500 })
+    } else {
+      let movie = models.WatchList.build({
+        title: title,
+        imdbid: imdbID,
+        userid: userid
       })
-        .then(result => {
-          res.json(result)
-        })
-    }).catch(error => res.json({ success: false, message: "Movie was NOT added" }))
+      movie.save().then((savedMovie) => {
+      })
+        .then(() => {
+          models.WatchList.findAll({
+            where: {
+              userid: userid
+            }
+          })
+            .then(result => {
+              res.json(result)
+            })
+        }).catch(error => res.json({ success: false, message: "Movie was NOT added" }))
+
+    }
+  })
+  // let movie = models.WatchList.build({
+  //   title: title,
+  //   imdbid: imdbID,
+  //   userid: userid
+  // })
+  // movie.save().then((savedMovie) => {
+  // })
+  //   .then(() => {
+  //     models.WatchList.findAll({
+  //       where: {
+  //         userid: userid
+  //       }
+  //     })
+  //       .then(result => {
+  //         res.json(result)
+  //       })
+  //   }).catch(error => res.json({ success: false, message: "Movie was NOT added" }))
 })
 
 //Getting USER WATCHLIST
@@ -316,30 +377,4 @@ function getDays(exp) {
   let goneDate = new Date(exp)
   return Math.ceil((goneDate - today.getTime()) / one_day)
 }
-
-
-// const transporter = nodemailer.createTransport({
-//   host: 'smtp.ethereal.email',
-//   port: 587,
-//   auth: {
-//     user: 'ruby.mcglynn48@ethereal.email',
-//     pass: 'TtaFjpUTeD8SRvzdUC'
-//   }
-// });
-
-// let mailOptions = {
-//   from: 'ruby.mcglynn48@ethereal.email',
-//   to: 'miglas9@yahoo.com',
-//   subject: 'Sending Email using Node.js',
-//   text: 'That was easy!'
-// };
-
-// transporter.sendMail(mailOptions, function (error, info) {
-//   if (error) {
-//     console.log(error);
-//   } else {
-//     console.log('Email sent: ' + info.response);
-//   }
-// });
-
-// "<h3>" + `${mailer[0].title} will be leaving Netflix on ${mailer[0].date} in ${mailer[0].counter} days` + "</h3>"
+// api endpoint new releases: "https://unogs-unogs-v1.p.rapidapi.com/aaapi.cgi?q=get:new7:US&p=1&t=ns&st=adv"
